@@ -15,35 +15,35 @@ public static class WebApplicationExtensions
         app.UseExceptionManagement(options => options
             .AddHandler(builder => builder
                 .Catch<ValidationException>()
-                .RespondWithValidationProblemDetails())
+                .ReplyWithValidationProblemDetails())
             .AddHandler(builder => builder
                 .Catch<EntityUniqueConstraintException>()
-                .RespondWithValidationProblemDetails(ex => new Dictionary<string, string[]>() { [ex.MemberName] = [ex.Message] }))
+                .ReplyWithValidationProblemDetails(ex => new Dictionary<string, string[]>() { [ex.MemberName] = [ex.Message] }))
             .AddHandler(builder => builder
                 .Catch<ReferencedEntityNotFoundException>()
-                .RespondWithProblemDetails(HttpStatusCode.BadRequest))
+                .ReplyWithProblemDetails(HttpStatusCode.BadRequest))
             .AddHandler(builder => builder
                 .Catch<EntityNotFoundException>()
-                .RespondWithStatusCode(HttpStatusCode.NotFound))
+                .ReplyWithStatusCode(HttpStatusCode.NotFound))
             .AddHandler(builder => builder
                 .Catch<AuthenticationException>()
-                .RespondWithStatusCode(HttpStatusCode.Unauthorized))
+                .ReplyWithStatusCode(HttpStatusCode.Unauthorized))
             .AddHandler(builder => builder
                 .Catch<TimeoutException>()
                 .Log(LogLevel.Warning)
-                .RespondWithStatusCode(HttpStatusCode.GatewayTimeout))
+                .ReplyWithStatusCode(HttpStatusCode.GatewayTimeout))
             .AddHandler(builder => builder
                 .Catch<SocketException>()
                 .Log(LogLevel.Warning)
-                .RespondWithStatusCode(HttpStatusCode.BadGateway))
+                .ReplyWithStatusCode(HttpStatusCode.BadGateway))
             .AddHandler(builder => builder
                 .Catch<NotImplementedException>()
                 .Log(LogLevel.Warning)
-                .RespondWithStatusCode(HttpStatusCode.NotImplemented))
+                .ReplyWithStatusCode(HttpStatusCode.NotImplemented))
             .AddHandler(builder => builder
                 .Catch<Exception>()
                 .Log(LogLevel.Critical)
-                .RespondWithStatusCode(HttpStatusCode.InternalServerError)));
+                .ReplyWithStatusCode(HttpStatusCode.InternalServerError)));
 
         app.UseHttpsRedirection();
         app.UseAuthorization();

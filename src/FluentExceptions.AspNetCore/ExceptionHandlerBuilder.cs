@@ -1,5 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using FluentExceptions.AspNetCore.ExceptionHandlerActivities;
+using Microsoft.AspNetCore.Http;
 
 namespace FluentExceptions.AspNetCore;
 
@@ -10,58 +10,42 @@ namespace FluentExceptions.AspNetCore;
 public sealed class ExceptionHandlerBuilder<TException>
     where TException : Exception
 {
-    private readonly Func<HttpContext, Exception, bool>? when;
-    private readonly List<Action<HttpContext, Exception>> interceptors = [];
+    private readonly List<IExceptionHandlerActivity> activities = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExceptionHandlerBuilder{TException}"/> class.
     /// </summary>
     internal ExceptionHandlerBuilder()
-    { }
+    {
+        AddActivity(new FilterActivity((_, ex) => typeof(TException).IsAssignableFrom(ex.GetType())));
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExceptionHandlerBuilder{TException}"/> class.
     /// </summary>
     /// <param name="when">The condition under which the handler applies.</param>
     internal ExceptionHandlerBuilder(Func<HttpContext, TException, bool> when)
+        : this()
     {
         ArgumentNullException.ThrowIfNull(when);
-        this.when = (context, exception) => when(context, (TException)exception);
+        AddActivity(new FilterActivity((context, ex) => when(context, (TException)ex)));
     }
 
     /// <summary>
-    /// Defines an action that will be performed before the exception is handled.
+    /// Adds an activity to the exception handler.
     /// </summary>
-    /// <param name="action">The action to perform.</param>
-    /// <returns>The current instance of the builder.</returns>
-    public ExceptionHandlerBuilder<TException> Intercept(Action<HttpContext, TException> action)
+    /// <param name="activity">The activity to add.</param>
+    /// <returns>The exception handler builder.</returns>
+    public ExceptionHandlerBuilder<TException> AddActivity(IExceptionHandlerActivity activity)
     {
-        ArgumentNullException.ThrowIfNull(action);
-        interceptors.Add((context, exception) => action(context, (TException)exception));
+        ArgumentNullException.ThrowIfNull(activity);
+        activities.Add(activity);
         return this;
     }
 
     /// <summary>
-    /// Defines the action that throws a new excaption that replaces the current one.
+    /// Creates the exception handler with the defined activities.
     /// </summary>
-    /// <param name="action">The action to perform.</param>
     /// <returns>The exception handler.</returns>
-    public ExceptionHandler Throw(Func<HttpContext, TException, Exception> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        Exception exceptionProvider(HttpContext context, Exception exception) => action(context, (TException)exception);
-        return new ExceptionHandler(typeof(TException), when, interceptors, exceptionProvider, null);
-    }
-
-    /// <summary>
-    /// Defines the action that handles the exception.
-    /// </summary>
-    /// <param name="action">The action to perform.</param>
-    /// <returns>The exception handler.</returns>
-    public ExceptionHandler Respond(Func<HttpContext, TException, IActionResult> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        IActionResult resultProvider(HttpContext context, Exception exception) => action(context, (TException)exception);
-        return new ExceptionHandler(typeof(TException), when, interceptors, null, resultProvider);
-    }
+    public ExceptionHandler Create() => new(activities);
 }

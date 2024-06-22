@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using FluentExceptions.AspNetCore.ExceptionHandlerActivities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
@@ -6,18 +7,39 @@ using System.Net;
 namespace FluentExceptions.AspNetCore;
 
 /// <summary>
-/// Extension methods for the exception handler builder to respond with HTTP status codes and messages.
+/// Extension methods for the exception handler builder to reply with
+/// an HTTP status code and optional message.
 /// </summary>
-public static class ResponseExtensions
+public static class ReplyExtensions
 {
     private const string TraceIdFieldName = "traceId";
     private const string SingleValidationErrorTitle = "A validation error occurred.";
     private const string MultipleValidationErrorTitle = "Validation errors occurred.";
 
     /// <summary>
-    /// Responds with a redirection response.
+    /// Reply with a custom action.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to handle.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
+    /// <param name="builder">The exception handler builder instance.</param>
+    /// <param name="action">An action to provide the response.</param>
+    /// <returns>The exception handler.</returns>
+    public static ExceptionHandler Reply<TException>(
+        this ExceptionHandlerBuilder<TException> builder,
+        Func<HttpContext, TException, IActionResult> action)
+        where TException : Exception
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(action);
+
+        return builder
+            .AddActivity(new ReplyActivity((context, ex) => action(context, (TException)ex)))
+            .Create();
+    }
+
+    /// <summary>
+    /// Reply with a redirection response.
+    /// </summary>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="location">The location the client should redirect to.</param>
     /// <returns>The exception handler builder instance.</returns>
@@ -27,68 +49,68 @@ public static class ResponseExtensions
         where TException : Exception
     {
         ArgumentNullException.ThrowIfNull(builder);
-        return builder.Respond((context, exception) => new RedirectResult(location));
+        return Reply(builder, (context, exception) => new RedirectResult(location));
     }
 
     /// <summary>
-    /// Responds with a simple status code response.
+    /// Reply with a simple status code response.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to handle.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="statusCode">The HTTP status code to return.</param>
     /// <returns>The exception handler builder instance.</returns>
-    public static ExceptionHandler RespondWithStatusCode<TException>(
+    public static ExceptionHandler ReplyWithStatusCode<TException>(
         this ExceptionHandlerBuilder<TException> builder,
         HttpStatusCode statusCode)
         where TException : Exception
     {
-        return RespondWithStatusCode(builder, (int)statusCode);
+        return ReplyWithStatusCode(builder, (int)statusCode);
     }
 
     /// <summary>
-    /// Responds with a simple status code response.
+    /// Reply with a simple status code response.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to handle.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="statusCode">The HTTP status code to return.</param>
     /// <returns>The exception handler builder instance.</returns>
-    public static ExceptionHandler RespondWithStatusCode<TException>(
+    public static ExceptionHandler ReplyWithStatusCode<TException>(
         this ExceptionHandlerBuilder<TException> builder,
         int statusCode)
         where TException : Exception
     {
         ArgumentNullException.ThrowIfNull(builder);
-        return builder.Respond((context, exception) => new StatusCodeResult(statusCode));
+        return Reply(builder, (context, exception) => new StatusCodeResult(statusCode));
     }
 
     /// <summary>
-    /// Responds with a status code and a <see cref="ProblemDetails"/> response in accordance with RFC-7807.
+    /// Reply with a status code and a <see cref="ProblemDetails"/> response in accordance with RFC-7807.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to handle.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="statusCode">The HTTP status code to return.</param>
     /// <returns>The exception handler builder instance.</returns>
-    public static ExceptionHandler RespondWithProblemDetails<TException>(
+    public static ExceptionHandler ReplyWithProblemDetails<TException>(
         this ExceptionHandlerBuilder<TException> builder,
         HttpStatusCode statusCode)
         where TException : Exception
     {
-        return RespondWithProblemDetails(builder, (int)statusCode);
+        return ReplyWithProblemDetails(builder, (int)statusCode);
     }
 
     /// <summary>
-    /// Responds with a status code and a <see cref="ProblemDetails"/> response in accordance with RFC-7807.
+    /// Reply with a status code and a <see cref="ProblemDetails"/> response in accordance with RFC-7807.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to handle.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="statusCode">The HTTP status code to return.</param>
     /// <returns>The exception handler builder instance.</returns>
-    public static ExceptionHandler RespondWithProblemDetails<TException>(
+    public static ExceptionHandler ReplyWithProblemDetails<TException>(
         this ExceptionHandlerBuilder<TException> builder,
         int statusCode)
         where TException : Exception
     {
-        return RespondWithProblemDetails(builder, statusCode, (context, exception) => new ProblemDetails
+        return ReplyWithProblemDetails(builder, statusCode, (context, exception) => new ProblemDetails
         {
             Title = GetProblemDetailTitle(statusCode),
             Status = statusCode,
@@ -97,31 +119,31 @@ public static class ResponseExtensions
     }
 
     /// <summary>
-    /// Responds with a status code and a <see cref="ProblemDetails"/> response in accordance with RFC-7807.
+    /// Reply with a status code and a <see cref="ProblemDetails"/> response in accordance with RFC-7807.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to handle.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="statusCode">The HTTP status code to return.</param>
     /// <param name="action">An action to generate the problem response message.</param>
     /// <returns>The exception handler builder instance.</returns>
-    public static ExceptionHandler RespondWithProblemDetails<TException>(
+    public static ExceptionHandler ReplyWithProblemDetails<TException>(
         this ExceptionHandlerBuilder<TException> builder,
         HttpStatusCode statusCode,
         Func<HttpContext, TException, ProblemDetails> action)
         where TException : Exception
     {
-        return RespondWithProblemDetails(builder, (int)statusCode, action);
+        return ReplyWithProblemDetails(builder, (int)statusCode, action);
     }
 
     /// <summary>
-    /// Responds with a status code and a <see cref="ProblemDetails"/> response in accordance with RFC-7807.
+    /// Reply with a status code and a <see cref="ProblemDetails"/> response in accordance with RFC-7807.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to handle.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="statusCode">The HTTP status code to return.</param>
     /// <param name="action">An action to generate the problem response message.</param>
     /// <returns>The exception handler builder instance.</returns>
-    public static ExceptionHandler RespondWithProblemDetails<TException>(
+    public static ExceptionHandler ReplyWithProblemDetails<TException>(
         this ExceptionHandlerBuilder<TException> builder,
         int statusCode,
         Func<HttpContext, TException, ProblemDetails> action)
@@ -130,9 +152,11 @@ public static class ResponseExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(action);
 
-        return builder.Respond((context, exception) =>
+        return Reply(builder, (context, exception) =>
         {
-            var problemDetails = action(context, exception) ?? throw new InvalidOperationException("A problem details instance must be returned.");
+            var problemDetails = action(context, exception)
+                ?? throw new InvalidOperationException("A problem details instance must be returned.");
+
             problemDetails.Status ??= statusCode;
 
             if (context.TraceIdentifier != null && !problemDetails.Extensions.ContainsKey(TraceIdFieldName))
@@ -143,29 +167,32 @@ public static class ResponseExtensions
     }
 
     /// <summary>
-    /// Responds with a status code and a <see cref="ValidationProblemDetails"/> response in accordance with RFC-7807.
+    /// Reply with a status code and a <see cref="ValidationProblemDetails"/> response in accordance with RFC-7807.
     /// </summary>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <returns>The exception handler builder instance.</returns>
-    public static ExceptionHandler RespondWithValidationProblemDetails(
-        this ExceptionHandlerBuilder<ValidationException> builder)
+    public static ExceptionHandler ReplyWithValidationProblemDetails<TException>(
+        this ExceptionHandlerBuilder<TException> builder)
+        where TException : ValidationException
     {
-        return RespondWithValidationProblemDetails(builder, exception => exception.ValidationResult.MemberNames
+        return ReplyWithValidationProblemDetails(builder, exception => exception.ValidationResult.MemberNames
             .ToDictionary(name => name, name => new[] { exception.ValidationResult.ErrorMessage! }));
     }
 
     /// <summary>
-    /// Responds with a status code and a <see cref="ValidationProblemDetails"/> response in accordance with RFC-7807.
+    /// Reply with a status code and a <see cref="ValidationProblemDetails"/> response in accordance with RFC-7807.
     /// </summary>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="errorsFactory">A function to generate the error list.</param>
     /// <returns>The exception handler builder instance.</returns>
-    public static ExceptionHandler RespondWithValidationProblemDetails<TException>(
+    public static ExceptionHandler ReplyWithValidationProblemDetails<TException>(
         this ExceptionHandlerBuilder<TException> builder,
         Func<TException, IDictionary<string, string[]>> errorsFactory)
         where TException : Exception
     {
-        return RespondWithProblemDetails(builder, HttpStatusCode.BadRequest, (context, exception) =>
+        return ReplyWithProblemDetails(builder, HttpStatusCode.BadRequest, (context, exception) =>
         {
             var errors = errorsFactory(exception);
 

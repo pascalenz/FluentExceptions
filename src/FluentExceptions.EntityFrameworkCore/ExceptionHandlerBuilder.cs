@@ -1,4 +1,6 @@
-﻿namespace FluentExceptions.EntityFrameworkCore;
+﻿using FluentExceptions.EntityFrameworkCore.ExceptionHandlerActivities;
+
+namespace FluentExceptions.EntityFrameworkCore;
 
 /// <summary>
 /// A builder class for defining an exception handler.
@@ -7,78 +9,42 @@
 public sealed class ExceptionHandlerBuilder<TException>
     where TException : Exception
 {
-    private readonly Func<Exception, bool>? when;
-    private readonly List<Action<Exception>> interceptors = [];
+    private readonly List<IExceptionHandlerActivity> activities = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExceptionHandlerBuilder{TException}"/> class.
     /// </summary>
     internal ExceptionHandlerBuilder()
-    { }
+    {
+        AddActivity(new FilterActivity(ex => typeof(TException).IsAssignableFrom(ex.GetType())));
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExceptionHandlerBuilder{TException}"/> class.
     /// </summary>
     /// <param name="when">The condition under which the handler applies.</param>
     internal ExceptionHandlerBuilder(Func<TException, bool> when)
+        : this()
     {
         ArgumentNullException.ThrowIfNull(when);
-        this.when = exception => when((TException)exception);
+        AddActivity(new FilterActivity(ex => when((TException)ex)));
     }
 
     /// <summary>
-    /// Defines an action that will be performed before the exception is handled.
+    /// Adds an activity to the exception handler.
     /// </summary>
-    /// <param name="action">The action to perform.</param>
-    /// <returns>The current instance of the builder.</returns>
-    public ExceptionHandlerBuilder<TException> Intercept(Action<TException> action)
+    /// <param name="activity">The activity to add.</param>
+    /// <returns>The exception handler builder.</returns>
+    public ExceptionHandlerBuilder<TException> AddActivity(IExceptionHandlerActivity activity)
     {
-        ArgumentNullException.ThrowIfNull(action);
-        interceptors.Add(exception => action((TException)exception));
+        ArgumentNullException.ThrowIfNull(activity);
+        activities.Add(activity);
         return this;
     }
 
     /// <summary>
-    /// Defines the action that replaces the current exception with its inner exception.
+    /// Creates the exception handler with the defined activities.
     /// </summary>
     /// <returns>The exception handler.</returns>
-    public ExceptionHandler UnwrapInnerException()
-    {
-        return Replace(exception => exception.InnerException
-            ?? throw new InvalidOperationException("The exception does not have an inner exception"));
-    }
-
-    /// <summary>
-    /// Defines the action that replaces the original exception.
-    /// </summary>
-    /// <param name="action">The action to perform.</param>
-    /// <returns>The exception handler.</returns>
-    public ExceptionHandler Replace(Func<TException, Exception> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        Exception replacementProvider(Exception exception) => action((TException)exception);
-        return new ExceptionHandler(typeof(TException), when, interceptors, replacementProvider, null);
-    }
-
-    /// <summary>
-    /// Defines the action that replaces the original exception.
-    /// </summary>
-    /// <param name="action">The action to perform.</param>
-    /// <returns>The exception handler.</returns>
-    public ExceptionHandler Throw()
-    {
-        return new ExceptionHandler(typeof(TException), when, interceptors, null, null);
-    }
-
-    /// <summary>
-    /// Defines the action that throws the exception.
-    /// </summary>
-    /// <param name="action">The action to perform.</param>
-    /// <returns>The exception handler.</returns>
-    public ExceptionHandler Throw(Func<TException, Exception> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        Exception resultProvider(Exception exception) => action((TException)exception);
-        return new ExceptionHandler(typeof(TException), when, interceptors, null, resultProvider);
-    }
+    public ExceptionHandler Create() => new(activities);
 }

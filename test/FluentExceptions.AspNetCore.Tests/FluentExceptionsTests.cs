@@ -7,14 +7,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
-using System.Security.Authentication;
 using System.Text.Json;
 
 namespace FluentExceptions.AspNetCore.Tests;
 
 public class FluentExceptionsTests
 {
-    private static IHostBuilder CreateHost(Func<HttpContext, Task> configureRequestHandler, Action<ExceptionHandlingOptions> configureExceptionHandler)
+    private static Task<IHost> CreateHost(Func<HttpContext, Task> configureRequestHandler, Action<ExceptionHandlingOptions> configureExceptionHandler)
     {
         return new HostBuilder()
             .ConfigureWebHost(builder => builder
@@ -23,7 +22,8 @@ public class FluentExceptionsTests
                 .Configure(app => app
                     .UseExceptionManagement(configureExceptionHandler)
                     .UseRouting()
-                    .UseEndpoints(endpoint => endpoint.MapGet("/test", configureRequestHandler))));
+                    .UseEndpoints(endpoint => endpoint.MapGet("/test", configureRequestHandler))))
+            .StartAsync();
     }
 
     [Fact]
@@ -39,15 +39,29 @@ public class FluentExceptionsTests
                     .Throw((context, exception) => exception.InnerException!))
                 .AddHandler(builder => builder
                     .Catch<ValidationException>()
-                    .RespondWithStatusCode(HttpStatusCode.BadRequest)))
-            .StartAsync();
+                    .ReplyWithStatusCode(HttpStatusCode.BadRequest)));
 
         var response = await host.GetTestClient().GetAsync("/test");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task RespondWithValidationProblemDetails_Single()
+    public async Task ReplyWithStatusCode()
+    {
+        var exception = new Exception("Test Error");
+
+        using var host = await CreateHost(
+            context => throw exception,
+            options => options.AddHandler(builder => builder
+                .Catch<Exception>()
+                .ReplyWithStatusCode(HttpStatusCode.InternalServerError)));
+
+        var response = await host.GetTestClient().GetAsync("/test");
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReplyWithValidationProblemDetailsWithSingleError()
     {
         var exception = new ValidationException(new ValidationResult("Invalid name", ["name"]), null, null);
 
@@ -55,8 +69,7 @@ public class FluentExceptionsTests
             context => throw exception,
             options => options.AddHandler(builder => builder
                 .Catch<ValidationException>()
-                .RespondWithValidationProblemDetails()))
-            .StartAsync();
+                .ReplyWithValidationProblemDetails()));
 
         var response = await host.GetTestClient().GetAsync("/test");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -71,7 +84,7 @@ public class FluentExceptionsTests
     }
 
     [Fact]
-    public async Task RespondWithValidationProblemDetails_Multiple()
+    public async Task ReplyWithValidationProblemDetailsWithMultipleErrors()
     {
         var exception = new ValidationException(new ValidationResult("Invalid name", ["key 1", "key 2"]), null, null);
 
@@ -79,8 +92,7 @@ public class FluentExceptionsTests
             context => throw exception,
             options => options.AddHandler(builder => builder
                 .Catch<ValidationException>()
-                .RespondWithValidationProblemDetails()))
-            .StartAsync();
+                .ReplyWithValidationProblemDetails()));
 
         var response = await host.GetTestClient().GetAsync("/test");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -97,7 +109,7 @@ public class FluentExceptionsTests
     }
 
     [Fact]
-    public async Task RespondWithProblemDetails_Default()
+    public async Task ReplyWithDefaultProblemDetails()
     {
         var exception = new ValidationException("Test Error");
 
@@ -105,8 +117,7 @@ public class FluentExceptionsTests
             context => throw exception,
             options => options.AddHandler(builder => builder
                 .Catch<ValidationException>()
-                .RespondWithProblemDetails(HttpStatusCode.Conflict)))
-            .StartAsync();
+                .ReplyWithProblemDetails(HttpStatusCode.Conflict)));
 
         var response = await host.GetTestClient().GetAsync("/test");
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -118,7 +129,7 @@ public class FluentExceptionsTests
     }
 
     [Fact]
-    public async Task RespondWithProblemDetails_Custom()
+    public async Task ReplyWithCustomProblemDetails()
     {
         var exception = new ValidationException("Test Error");
 
@@ -126,8 +137,7 @@ public class FluentExceptionsTests
             context => throw exception,
             options => options.AddHandler(builder => builder
                 .Catch<ValidationException>()
-                .RespondWithProblemDetails(409, (_, exception) => new ProblemDetails { Title = exception.Message })))
-            .StartAsync();
+                .ReplyWithProblemDetails(409, (_, exception) => new ProblemDetails { Title = exception.Message })));
 
         var response = await host.GetTestClient().GetAsync("/test");
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);

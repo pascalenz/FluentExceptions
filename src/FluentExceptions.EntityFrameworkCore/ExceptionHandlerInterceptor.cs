@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Runtime.ExceptionServices;
 
@@ -24,26 +25,15 @@ internal sealed class ExceptionHandlerInterceptor(ExceptionHandlingOptions optio
     {
         foreach (var handler in options.Handlers)
         {
-            if (!handler.ExceptionType.IsAssignableFrom(exception.GetType()))
-                continue;
-
-            if (handler.When != null && !handler.When(exception))
-                continue;
-
-            foreach (var interceptor in handler.Interceptors)
+            foreach (var activity in handler.Activities)
             {
-                interceptor(exception);
-            }
+                var result = activity.Execute(ref exception);
 
-            if (handler.ReplacementExceptionProvider != null)
-            {
-                exception = handler.ReplacementExceptionProvider(exception);
-            }
+                if (result == ExceptionHandlerActivityResult.Skip)
+                    break;
 
-            if (handler.ThrowExceptionProvider != null)
-            {
-                exception = handler.ThrowExceptionProvider(exception);
-                break;
+                if (result == ExceptionHandlerActivityResult.Handled)
+                    return;
             }
         }
 

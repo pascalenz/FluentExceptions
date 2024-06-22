@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using System.Runtime.ExceptionServices;
 
 namespace FluentExceptions.AspNetCore;
@@ -15,7 +14,7 @@ internal sealed class ExceptionManagementMiddleware(RequestDelegate next, Except
     private readonly ExceptionHandlingOptions options = options;
 
     /// <summary>
-    /// Handle a request before / after it is processed by the next handler in the pipeline.
+    /// Handle a request and apply custom exception handling.
     /// </summary>
     /// <param name="httpContext">The HTTP context instance.</param>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
@@ -31,25 +30,15 @@ internal sealed class ExceptionManagementMiddleware(RequestDelegate next, Except
         {
             foreach (var handler in options.Handlers)
             {
-                if (!handler.ExceptionType.IsAssignableFrom(exception.GetType()))
-                    continue;
-
-                if (handler.When != null && !handler.When(httpContext, exception))
-                    continue;
-
-                foreach (var interceptor in handler.Interceptors)
+                foreach (var activity in handler.Activities)
                 {
-                    interceptor(httpContext, exception);
-                }
+                    var result = activity.Execute(httpContext, ref exception);
 
-                if (handler.ExceptionProvider != null)
-                    exception = handler.ExceptionProvider(httpContext, exception);
+                    if (result == ExceptionHandlerActivityResult.Skip)
+                        break;
 
-                if (handler.ResultProvider != null)
-                {
-                    var result = handler.ResultProvider(httpContext, exception);
-                    await result.ExecuteResultAsync(new ActionContext { HttpContext = httpContext });
-                    return;
+                    if (result == ExceptionHandlerActivityResult.Handled)
+                        return;
                 }
             }
 

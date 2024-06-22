@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using FluentExceptions.AspNetCore.ExceptionHandlerActivities;
 using Microsoft.Extensions.Logging;
 
 namespace FluentExceptions.AspNetCore;
@@ -11,7 +11,7 @@ public static class LogExtensions
     /// <summary>
     /// Logs the exception using the standard <see cref="ILogger"/>.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to log.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="level">The log level.</param>
     /// <returns>The exception handler builder instance.</returns>
@@ -26,7 +26,7 @@ public static class LogExtensions
     /// <summary>
     /// Logs the exception using the standard <see cref="ILogger"/>.
     /// </summary>
-    /// <typeparam name="TException">The type of the exception to log.</typeparam>
+    /// <typeparam name="TException">The type of the handled exception.</typeparam>
     /// <param name="builder">The exception handler builder instance.</param>
     /// <param name="level">The log level.</param>
     /// <param name="eventId">The event identifier.</param>
@@ -38,12 +38,6 @@ public static class LogExtensions
         where TException : Exception
     {
         ArgumentNullException.ThrowIfNull(builder);
-
-        return builder.Intercept((context, exception) =>
-        {
-            var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
-            var logger = loggerFactory.CreateLogger("FluentExceptions");
-            logger.Log(level, eventId, exception, exception.Message);
-        });
+        return builder.AddActivity(new LogExceptionActivity(level, eventId));
     }
 }
